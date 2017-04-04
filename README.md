@@ -2,7 +2,7 @@
 
 This project is a fork of Isislabs's Fentanyl plugin for IDA Pro. It replaces pySide with pyQt5 which makes it ready for IDA Pro 6.9. Check Isislab's github project to learn more about this plugin.
 
-Thank you very much Isislab for sharing this great tool. I made my life a lot easier!
+Thank you very much Isislab for sharing this great tool. It made my life a lot easier!
 
 ## Usage
 
