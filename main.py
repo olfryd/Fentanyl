@@ -26,35 +26,21 @@ import os
 import idaapi
 import idc
 import re
-
+from Hooks import Hooks
+from Handler import Handler
 import Fentanyl
 import AssembleForm
-import FtlHooks
 import CodeCaveFinder
 import Util
 import Neuter
 
-
-try:
-    from PySide import QtGui
-    from PySide import QtCore
-except ImportError:
-    print "PySide unavailable, no GUI"
-    QtCore = None
-    QtGui = None
-
-
 """ Main """
+
 ftl_path = os.path.dirname(__file__)
 
 ftl = Fentanyl.Fentanyl()
 asf = AssembleForm.AssembleForm()
-ftlh = FtlHooks.FtlHooks()
 ftln = Neuter.Neuter(ftl)
-ftlh.hook()
-
-#XXX: Store the parents of the QWidgets. Otherwise, some get GCed.
-hack = []
 
 #Interfaces to the methods in ftl
 def nopout():
@@ -116,81 +102,45 @@ def openspelunky():
 def neuter():
     ftl.neuter()
 
-#Helper functions
-def bind_ctx_menus():
-    #Find all the menus we need to modify
-    menus = []
-    for wid in qta.allWidgets():
-        if not isinstance(wid, QtGui.QMenu):
-            continue
-
-        parent = wid.parent()
-        if  parent.__class__ != QtGui.QWidget:
-            continue
-
-        #Find Hex/IDA Views
-        if ('Hex View' in parent.windowTitle() \
-                or 'IDA View' in parent.windowTitle() \
-                or len(parent.windowTitle()) == 1):
-            hack.append(parent)
-            menus.append(wid)
-
-    #Filter out menus with actions
-    menus = [i for i in menus if not i.actions()]
-
-    print 'Bound entries to %s' % menus
-
-    #Insert each entry into the context menu
-    for i in range(len(menus)):
-        menu = menus[i]
-        menu.addSeparator()
-
-        for qact in qdata:
-            menu.addAction(qact)
-
-
 #Hotkey definitions
 hotkeys = [
-    ('Replace with nops', True , ['Alt', 'N'], 'nopout.png', nopout),
-    ('Nops all Xrefs'   , True , ['Alt', 'X'], 'nopxrefs.png', nopxrefs),
-    ('Assemble'         , True , ['Alt', 'P'], 'assemble.png', assemble),
-    ('Toggle jump'      , True , ['Alt', 'J'], 'togglejump.png', togglejump),
-    ('Force jump'       , True , ['Ctrl', 'Alt', 'F'], 'uncondjump.png', uncondjump),
-    ('Undo Patch'       , False, ['Alt', 'Z'], None, undo),
-    ('Redo Patch'       , False, ['Alt', 'Y'], None, redo),
-    ('Save File'        , False, ['Alt', 'S'], None, savefile),
-    ('Find Code Caves'  , False, ['Alt', 'C'], None, openspelunky),
-    ('Neuter Binary'    , False, ['Ctrl', 'Alt', 'N'], None, neuter)
+    ('my:nopout', 'Replace with nops', True , 'Alt+N', 'nopout.png', nopout),
+    ('my:nopxrefs', 'Nops all Xrefs'   , True , 'Alt+X', 'nopxrefs.png', nopxrefs),
+    ('my:assemble', 'Assemble'         , True , 'Alt+P', 'assemble.png', assemble),
+    ('my:togglejmp', 'Toggle jump'      , True , 'Alt+J', 'togglejump.png', togglejump),
+    ('my:forcejmp', 'Force jump'       , True , 'Ctrl+Alt+F', 'uncondjump.png', uncondjump),
+    ('my:undo', 'Undo Patch'       , False, 'Alt+Z', None, undo),
+    ('my:redo', 'Redo Patch'       , False, 'Alt+Y', None, redo),
+    ('my:save', 'Save File'        , False, 'Alt+S', None, savefile),
+    ('my:codecave', 'Find Code Caves'  , False, 'Alt+C', None, openspelunky),
+    ('my:neuter', 'Neuter Binary'    , False, 'Ctrl+Alt+N', None, neuter)
 ]
 
+menu_entries = []
 
-#Register hotkeys
-for name, in_menu, keys, icon, func in hotkeys:
-    idaapi.add_hotkey('-'.join(keys), func)
+# Register actions and add to context menus
+for act_id, text , in_menu, keys, icon, func in hotkeys:
+    handler = Handler(func)
 
+    # load custom icon
+    icon_id = -1 # default for no icon
+    if icon is not None:
+        icon_id = idaapi.load_custom_icon(os.path.join(ftl_path, 'icons', icon))
 
-#Register menu items
-if QtCore:
-    qta = QtCore.QCoreApplication.instance()
+    action_desc = idaapi.action_desc_t(
+        act_id,   # The action name. This acts like an ID and must be unique
+        text,  # The action text.
+        handler,   # The action handler.
+        keys,      # Optional: the action shortcut
+        None,  # Optional: the action tooltip (available in menus/toolbar)
+        icon_id)           # Optional: the action icon (shows when in menus/toolbars)
 
-    qdata = []
-    for name, in_menu, keys, icon, func in (i for i in hotkeys if i[1]):
-        qact = QtGui.QAction(QtGui.QIcon(os.path.join(ftl_path, 'icons', icon)), name, qta)
-        qact.triggered.connect(func)
+    # Register the action
+    idaapi.register_action(action_desc)
 
-        qks = QtGui.QKeySequence('+'.join(keys))
-        qact.setShortcut(qks)
-        qdata.append(qact)
+    # attach to menus
+    if in_menu:
+        menu_entries.append(act_id)
 
-    bind_ctx_menus()
-
-
-#Rebind on new db
-ftlh.register('LoadFile', bind_ctx_menus)
-#Rebind on new IDA View
-ftlh.register('WindowOpen', bind_ctx_menus)
-ftlh.register('GraphNewProximityView', bind_ctx_menus)
-#Rebind on new Hex View
-ftlh.register('ToggleDump', bind_ctx_menus)
-#Reset on IDB close
-ftlh.register('CloseBase', ftl.clear)
+hooks = Hooks(menu_entries)
+hooks.hook()

@@ -1,9 +1,10 @@
 try:
-    from PySide import QtGui, QtCore
+    from PyQt5 import QtGui, QtCore, QtWidgets
 except ImportError:
-    print "PySide unavailable, no CodeCaveFinder"
+    print "PyQt5 unavailable, no CodeCaveFinder"
     QtCore = None
     QtGui = None
+    QtWidgets = None
 import idaapi, idc
 
 class CodeCaveWindow(idaapi.PluginForm):
@@ -52,7 +53,7 @@ class CodeCaveWindow(idaapi.PluginForm):
                 self.addEntryToTree(segment[0], cave[0], cave[1])
 
     def OnCreate(self, form):
-        self.parent = self.FormToPySideWidget(form)
+        self.parent = self.FormToPyQtWidget(form)
         self.tree = QtGui.QTreeWidget()
         self.tree.setHeaderLabels(("Segment","Address","Size"))
         self.tree.setColumnWidth(0, 100)
